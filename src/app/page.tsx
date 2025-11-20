@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -164,7 +164,7 @@ export default function VehicleDashboard() {
         font: {
           size: 20,
           family: "Prompt, sans-serif",
-          weight: "bold" as "bold",
+          weight: "bold" as const,
         },
         color: "#22223b",
         padding: { top: 10, bottom: 10 },
@@ -217,6 +217,54 @@ export default function VehicleDashboard() {
     },
   };
 
+  // ฟังก์ชันดึงข้อมูลจากแต่ละประตู
+  const fetchGateData = useCallback(async (gateId: number) => {
+    try {
+      const response = await fetch(
+        `https://n8n-vehicle.app.n8n.cloud/webhook/vehicle_count/all?type=gate&id=${gateId}&start=${startDate}&stop=${endDate}`
+      );
+      if (!response.ok) {
+        // setError(`เชื่อมต่อข้อมูลประตู ${gateId} ไม่สำเร็จ`); // Comment ออกเพื่อลดการรบกวน UI หรือจะเปิดใช้ก็ได้
+        console.error(`เชื่อมต่อข้อมูลประตู ${gateId} ไม่สำเร็จ`);
+        return [];
+      }
+      const text = await response.text();
+      if (!text) {
+        return [];
+      }
+      const result: VehicleCountResponse[] = JSON.parse(text);
+      return result[0]?.data || [];
+    } catch (err) {
+      // แก้ไข: ใช้ console.error เพื่อแก้ Warning 'err' defined but never used
+      console.error(`เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ (${gateId})`, err);
+      // setError(`เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ (${gateId})`);
+      return [];
+    }
+  }, [startDate, endDate]); // เพิ่ม dependencies
+
+  // ฟังก์ชันดึงข้อมูลรายวัน
+  const fetchDailyData = async (gateId: number, currentDay: string) => {
+    try {
+      const response = await fetch(
+        `https://n8n-vehicle.app.n8n.cloud/webhook/vehicle_count/all?type=gate&id=${gateId}&start=${currentDay}&stop=${currentDay}`
+      );
+      if (!response.ok) {
+        console.error(`เชื่อมต่อข้อมูลรายวันประตู ${gateId} ไม่สำเร็จ`);
+        return [];
+      }
+      const text = await response.text();
+      if (!text) {
+        return [];
+      }
+      const result: VehicleCountResponse[] = JSON.parse(text);
+      return result[0]?.data || [];
+    } catch (error) {
+        // แก้ไข: ใช้ console.error เพื่อแก้ Warning 'error' defined but never used
+        console.error(`เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ (รายวัน ${gateId})`, error);
+      return [];
+    }
+  };
+
   // ดึงข้อมูลรายวันด้วย fetchDailyData
   useEffect(() => {
     const fetchDailyChartData = async () => {
@@ -248,6 +296,8 @@ export default function VehicleDashboard() {
         const combinedData = allData.flat();
         setDailyChartRawData(combinedData);
       } catch (err) {
+         // แก้ไข: ใช้ console.error เพื่อแก้ Warning 'err' defined but never used
+        console.error("เกิดข้อผิดพลาดในการดึงข้อมูลรายวัน", err);
         setError("เกิดข้อผิดพลาดในการดึงข้อมูลรายวัน");
         setDailyChartRawData([]);
       }
@@ -330,51 +380,9 @@ export default function VehicleDashboard() {
     };
   }, [dailyChartRawData, dailyCurrentPage, startDate, endDate]);
 
-  // ฟังก์ชันดึงข้อมูลจากแต่ละประตู
-  const fetchGateData = async (gateId: number) => {
-    try {
-      const response = await fetch(
-        `https://n8n-vehicle.app.n8n.cloud/webhook/vehicle_count/all?type=gate&id=${gateId}&start=${startDate}&stop=${endDate}`
-      );
-      if (!response.ok) {
-        setError(`เชื่อมต่อข้อมูลประตู ${gateId} ไม่สำเร็จ`);
-        return [];
-      }
-      const text = await response.text();
-      if (!text) {
-        return [];
-      }
-      const result: VehicleCountResponse[] = JSON.parse(text);
-      return result[0]?.data || [];
-    } catch (error) {
-      setError(`เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ (${gateId})`);
-      return [];
-    }
-  };
 
-  // ฟังก์ชันดึงข้อมูลรายวัน
-  const fetchDailyData = async (gateId: number, currentDay: string) => {
-    try {
-      const response = await fetch(
-        `https://n8n-vehicle.app.n8n.cloud/webhook/vehicle_count/all?type=gate&id=${gateId}&start=${currentDay}&stop=${currentDay}`
-      );
-      if (!response.ok) {
-        setError(`เชื่อมต่อข้อมูลรายวันประตู ${gateId} ไม่สำเร็จ`);
-        return [];
-      }
-      const text = await response.text();
-      if (!text) {
-        return [];
-      }
-      const result: VehicleCountResponse[] = JSON.parse(text);
-      return result[0]?.data || [];
-    } catch (error) {
-      setError(`เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ (รายวัน ${gateId})`);
-      return [];
-    }
-  };
-
-  const fetchData = async () => {
+  // แก้ไข: ใช้ useCallback หุ้ม fetchData เพื่อแก้ Warning useEffect dependency
+  const fetchData = useCallback(async () => {
     if (!startDate || !endDate) {
       setError("กรุณาเลือกวันที่");
       return;
@@ -395,11 +403,11 @@ export default function VehicleDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate, fetchGateData]); // ใส่ dependencies ให้ครบ
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]); // ใส่ fetchData ใน dependency array
 
   const getCameraVehicleCount = (
     cameraId: number,
